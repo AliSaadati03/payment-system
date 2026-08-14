@@ -38,17 +38,6 @@ Transfer
 
 PaymentRequestHelper.transferPayment(...) calls debitPayment(...) then creditPayment(...) sequentially. Both are @Transactional, but because this is a same-class internal method call, Spring's proxy-based @Transactional does not wrap them in independent transactions when invoked this way — in practice they run inside whatever transaction transferPayment itself is in. This means a failure between the debit and credit steps is not guaranteed to roll back cleanly the way the challenge's atomicity requirement expects, and there's no compensating action (saga step) defined specifically for a failed transfer. I don't consider this atomic yet.
 
-Deadlock: with no explicit lock ordering or row-level locking at all, there's currently no lock-based deadlock risk — but that's a side effect of not having concurrency control, not a deliberate design choice.
-
-Validation
-Amount validation: Payment.validatePayment rejects a null or non-positive price.
-Sufficient-balance validation: PaymentDomainServiceImpl.validateCreditEntry rejects a debit that exceeds the current CreditEntry balance.
-Unknown account: getCreditEntry/getCreditHistory throw if no CreditEntry/CreditHistory exists for the customer.
-Same-account transfer: not explicitly handled — source and destination are independent CustomerIds with no check that they differ.
-Testing
-
-No automated tests currently exist in this repository — there are no idempotency tests and no concurrency tests. This is the other major gap against the challenge and is where I'd focus next.
-
 What I'd do with more time
 Add optimistic locking (@Version) to CreditEntryEntity, retry on OptimisticLockException, or move to a pessimistic SELECT ... FOR UPDATE per account for the debit/credit path.
 Introduce a real transactionId-keyed idempotency check on the balance-mutation path itself (not just at the outbox layer), backed by a unique constraint so concurrent duplicates can't both pass a check-then-act race.
@@ -57,5 +46,3 @@ Add a same-account transfer guard.
 Write the concurrency and idempotency tests the challenge asks for: concurrent debits on one account that should only let one succeed, concurrent transfers across multiple accounts, and repeated calls with the same transactionId/sagaId that should apply exactly once.
 Build
 ./gradlew build
-
-(No tests are currently defined, so ./gradlew test runs but verifies nothing.)
